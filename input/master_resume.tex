@@ -1,0 +1,102 @@
+% Master Resume Template
+% Replace this with your actual resume content
+
+\documentclass[10pt,letterpaper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[top=0.5in,bottom=0.5in,left=0.5in,right=0.5in]{geometry}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{hyperref}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+
+\titleformat{\section}{\large\bfseries}{}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{6pt}{6pt}
+
+\setlist[itemize]{noitemsep, topsep=0pt, parsep=0pt, partopsep=0pt, leftmargin=*}
+
+% Custom commands
+\newcommand{\resumeSubheading}[4]{
+  \item
+    \begin{tabular*}{\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & #2 \\
+      \textit{#3} & \textit{#4} \\
+    \end{tabular*}
+}
+
+\newcommand{\resumeItem}[1]{\item #1}
+
+\begin{document}
+
+% Header
+\begin{center}
+    \textbf{\Huge Your Name} \\
+    \vspace{2pt}
+    your.email@email.com | (555) 123-4567 | City, State \\
+    \vspace{2pt}
+    \href{https://linkedin.com/in/yourprofile}{linkedin.com/in/yourprofile} |
+    \href{https://github.com/yourusername}{github.com/yourusername}
+\end{center}
+
+\section{Experience}
+\begin{itemize}[leftmargin=0.15in, label={}]
+
+\resumeSubheading
+    {Senior Software Engineer}{Jan 2022 -- Present}
+    {Tech Company Inc.}{San Francisco, CA}
+    \begin{itemize}[leftmargin=0.2in]
+        \resumeItem{Led development of microservices architecture using Python and AWS, reducing latency by 40\%}
+        \resumeItem{Implemented CI/CD pipelines with Jenkins and Docker, improving deployment frequency by 3x}
+        \resumeItem{Mentored team of 5 junior developers, conducting code reviews and technical training sessions}
+        \resumeItem{Designed and built RESTful APIs handling 10K+ requests per second}
+    \end{itemize}
+
+\resumeSubheading
+    {Software Engineer}{Jun 2019 -- Dec 2021}
+    {Startup Corp}{New York, NY}
+    \begin{itemize}[leftmargin=0.2in]
+        \resumeItem{Developed full-stack web applications using React and Node.js}
+        \resumeItem{Built data pipelines with Apache Kafka and PostgreSQL processing 1M+ daily events}
+        \resumeItem{Collaborated with product team to define requirements and deliver features on schedule}
+        \resumeItem{Optimized database queries resulting in 50\% reduction in response times}
+    \end{itemize}
+
+\end{itemize}
+
+\section{Education}
+\begin{itemize}[leftmargin=0.15in, label={}]
+
+\resumeSubheading
+    {Bachelor of Science in Computer Science}{2015 -- 2019}
+    {University of Technology}{City, State}
+
+\end{itemize}
+
+\section{Technical Skills}
+\begin{itemize}[leftmargin=0.15in, label={}]
+    \item \textbf{Languages}: Python, JavaScript, TypeScript, Java, SQL, Go
+    \item \textbf{Frameworks}: React, Node.js, Django, Flask, FastAPI
+    \item \textbf{Cloud \& DevOps}: AWS, Docker, Kubernetes, Jenkins, Terraform, CI/CD
+    \item \textbf{Databases}: PostgreSQL, MongoDB, Redis, Elasticsearch
+    \item \textbf{Tools}: Git, Linux, Agile, Scrum, JIRA
+\end{itemize}
+
+\section{Projects}
+\begin{itemize}[leftmargin=0.15in, label={}]
+
+\resumeSubheading
+    {Open Source Contribution}{2023}
+    {Popular Framework}{}
+    \begin{itemize}[leftmargin=0.2in]
+        \resumeItem{Contributed performance improvements to core library, merged into main branch}
+        \resumeItem{Fixed critical security vulnerability affecting 100K+ users}
+    \end{itemize}
+
+\end{itemize}
+
+\end{document}

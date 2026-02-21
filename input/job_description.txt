@@ -1,0 +1,37 @@
+Senior Software Engineer - Backend
+
+About the Role:
+We are looking for a Senior Software Engineer to join our backend team. You will be responsible for designing, developing, and maintaining scalable backend services that power our platform.
+
+Required Qualifications:
+- 5+ years of experience in software development
+- Strong proficiency in Python and/or Go
+- Experience with cloud platforms (AWS, GCP, or Azure)
+- Experience with containerization technologies (Docker, Kubernetes)
+- Strong understanding of RESTful API design
+- Experience with SQL and NoSQL databases (PostgreSQL, MongoDB, Redis)
+- Familiarity with CI/CD pipelines and DevOps practices
+- Strong problem-solving and analytical skills
+- Excellent communication and collaboration abilities
+
+Preferred Qualifications:
+- Experience with microservices architecture
+- Knowledge of message queues (Kafka, RabbitMQ)
+- Experience with Terraform or other IaC tools
+- Contributions to open source projects
+- Experience mentoring junior engineers
+- Familiarity with Agile/Scrum methodologies
+
+Responsibilities:
+- Design and implement scalable backend services
+- Write clean, maintainable, and well-tested code
+- Collaborate with cross-functional teams
+- Participate in code reviews and technical discussions
+- Mentor junior team members
+- Troubleshoot and resolve production issues
+- Contribute to architectural decisions
+
+Tech Stack:
+Python, Go, AWS, Kubernetes, Docker, PostgreSQL, Redis, Kafka, Terraform, GitHub Actions
+
+We offer competitive compensation, flexible work arrangements, and a collaborative team environment.
