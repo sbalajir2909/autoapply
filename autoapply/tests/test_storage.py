@@ -31,6 +31,7 @@ from autoapply.storage.dedup import (
 def fresh_db():
     """Wipe and reinitialise the DB before every test."""
     conn = sqlite3.connect(cfg.DB_PATH)
+    conn.execute("DROP TABLE IF EXISTS status_history")
     conn.execute("DROP TABLE IF EXISTS jobs")
     conn.commit()
     conn.close()
@@ -44,12 +45,13 @@ def fresh_db():
 
 class TestInitDb:
     def test_creates_jobs_table(self):
-        conn = get_connection()
-        tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
-        conn.close()
-        assert any(t["name"] == "jobs" for t in tables)
+        with get_connection() as conn:
+            tables = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        table_names = [t["name"] for t in tables]
+        assert "jobs" in table_names
+        assert "status_history" in table_names
 
     def test_idempotent(self):
         """Calling init_db twice must not raise."""
@@ -218,30 +220,26 @@ class TestDedup:
         assert generate_sig_hash("A" * 500 + "B") == generate_sig_hash("A" * 500 + "C")
 
     def test_is_duplicate_false_when_db_empty(self):
-        conn = get_connection()
-        assert is_duplicate("uuid-new", "sig-new", conn) is False
-        conn.close()
+        with get_connection() as conn:
+            assert is_duplicate("uuid-new", "sig-new", conn) is False
 
     def test_is_duplicate_true_by_uuid(self):
         insert_job(uuid="u1", company_name="C", job_url="https://x.com",
                    sig_hash="s1")
-        conn = get_connection()
-        assert is_duplicate("u1", "sig-other", conn) is True
-        conn.close()
+        with get_connection() as conn:
+            assert is_duplicate("u1", "sig-other", conn) is True
 
     def test_is_duplicate_true_by_sig(self):
         insert_job(uuid="u1", company_name="C", job_url="https://x.com",
                    sig_hash="s1")
-        conn = get_connection()
-        assert is_duplicate("uuid-other", "s1", conn) is True
-        conn.close()
+        with get_connection() as conn:
+            assert is_duplicate("uuid-other", "s1", conn) is True
 
     def test_is_duplicate_false_when_different(self):
         insert_job(uuid="u1", company_name="C", job_url="https://x.com",
                    sig_hash="s1")
-        conn = get_connection()
-        assert is_duplicate("u-new", "s-new", conn) is False
-        conn.close()
+        with get_connection() as conn:
+            assert is_duplicate("u-new", "s-new", conn) is False
 
 
 # ────────────────────────────────────────────────────────────────────────────

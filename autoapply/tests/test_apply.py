@@ -118,11 +118,14 @@ class TestParseResponse:
 
 class TestClassifyPage:
     def test_uses_heuristic_when_no_api_key(self):
+        # Make get_sync_client raise ImportError so classifier falls back to
+        # the ANTHROPIC_API_KEY check, which is empty → heuristic path
         import autoapply.apply.classifier as cls_mod
         orig = cls_mod.ANTHROPIC_API_KEY
         cls_mod.ANTHROPIC_API_KEY = ""
         try:
-            result = classify_page(GREENHOUSE_HTML)
+            with patch("autoapply.llm.get_sync_client", side_effect=ImportError("no module")):
+                result = classify_page(GREENHOUSE_HTML)
             assert isinstance(result, PageAnalysis)
         finally:
             cls_mod.ANTHROPIC_API_KEY = orig
@@ -142,19 +145,13 @@ class TestClassifyPage:
         mock_response = MagicMock()
         mock_response.content = [mock_content]
 
-        import autoapply.apply.classifier as cls_mod
-        orig = cls_mod.ANTHROPIC_API_KEY
-        cls_mod.ANTHROPIC_API_KEY = "fake-key"
-        try:
-            with patch("autoapply.apply.classifier.anthropic") as mock_anthropic:
-                mock_client = MagicMock()
-                mock_anthropic.Anthropic.return_value = mock_client
-                mock_client.messages.create.return_value = mock_response
-                result = classify_page(GREENHOUSE_HTML)
-            assert result.is_apply_page is True
-            assert result.ats_platform == "greenhouse"
-        finally:
-            cls_mod.ANTHROPIC_API_KEY = orig
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = mock_response
+
+        with patch("autoapply.llm.get_sync_client", return_value=mock_client):
+            result = classify_page(GREENHOUSE_HTML)
+        assert result.is_apply_page is True
+        assert result.ats_platform == "greenhouse"
 
     def test_falls_back_on_json_error(self):
         mock_content = MagicMock()
@@ -162,18 +159,12 @@ class TestClassifyPage:
         mock_response = MagicMock()
         mock_response.content = [mock_content]
 
-        import autoapply.apply.classifier as cls_mod
-        orig = cls_mod.ANTHROPIC_API_KEY
-        cls_mod.ANTHROPIC_API_KEY = "fake-key"
-        try:
-            with patch("autoapply.apply.classifier.anthropic") as mock_anthropic:
-                mock_client = MagicMock()
-                mock_anthropic.Anthropic.return_value = mock_client
-                mock_client.messages.create.return_value = mock_response
-                result = classify_page(GREENHOUSE_HTML)
-            assert isinstance(result, PageAnalysis)
-        finally:
-            cls_mod.ANTHROPIC_API_KEY = orig
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = mock_response
+
+        with patch("autoapply.llm.get_sync_client", return_value=mock_client):
+            result = classify_page(GREENHOUSE_HTML)
+        assert isinstance(result, PageAnalysis)
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -281,9 +272,9 @@ class TestStrategies:
         from autoapply.apply.strategies.lever import LeverStrategy
         assert LeverStrategy.auto_submit is True
 
-    def test_workday_no_auto_submit(self):
+    def test_workday_auto_submit(self):
         from autoapply.apply.strategies.workday import WorkdayStrategy
-        assert WorkdayStrategy.auto_submit is False
+        assert WorkdayStrategy.auto_submit is True
 
     def test_generic_no_auto_submit(self):
         from autoapply.apply.strategies.generic import GenericStrategy
@@ -325,7 +316,11 @@ class TestNavigator:
         page.context = MagicMock()
         page.context.pages = [page]
 
-        with patch("autoapply.apply.navigator.classify_page") as mock_cls:
+        with (
+            patch("autoapply.apply.navigator.classify_page") as mock_cls,
+            patch("autoapply.apply.navigator.detect_auth_wall", new=AsyncMock(return_value="none")),
+            patch("autoapply.apply.navigator.handle_auth", new=AsyncMock(return_value=True)),
+        ):
             mock_cls.return_value = PageAnalysis(
                 is_apply_page=True, has_apply_button=False,
                 ats_platform="greenhouse", form_fields=[],
@@ -345,7 +340,11 @@ class TestNavigator:
         page.context = MagicMock()
         page.context.pages = [page]
 
-        with patch("autoapply.apply.navigator.classify_page") as mock_cls:
+        with (
+            patch("autoapply.apply.navigator.classify_page") as mock_cls,
+            patch("autoapply.apply.navigator.detect_auth_wall", new=AsyncMock(return_value="none")),
+            patch("autoapply.apply.navigator.handle_auth", new=AsyncMock(return_value=True)),
+        ):
             mock_cls.return_value = PageAnalysis(
                 is_apply_page=False, has_apply_button=False,
                 ats_platform="unknown", form_fields=[],

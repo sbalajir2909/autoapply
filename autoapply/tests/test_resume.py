@@ -29,7 +29,8 @@ class TestJdAnalyzer:
         orig = mod.ANTHROPIC_API_KEY
         mod.ANTHROPIC_API_KEY = ""   # disable Claude, use regex only
         try:
-            result = analyze_jd(SAMPLE_JD)
+            with patch("autoapply.llm.get_sync_client", side_effect=ImportError("no key")):
+                result = analyze_jd(SAMPLE_JD)
         finally:
             mod.ANTHROPIC_API_KEY = orig
 
@@ -43,7 +44,8 @@ class TestJdAnalyzer:
         orig = mod.ANTHROPIC_API_KEY
         mod.ANTHROPIC_API_KEY = ""
         try:
-            result = analyze_jd(SAMPLE_JD)
+            with patch("autoapply.llm.get_sync_client", side_effect=ImportError("no key")):
+                result = analyze_jd(SAMPLE_JD)
         finally:
             mod.ANTHROPIC_API_KEY = orig
         kws = [k.lower() for k in result["keywords"]]
@@ -55,7 +57,8 @@ class TestJdAnalyzer:
         orig = mod.ANTHROPIC_API_KEY
         mod.ANTHROPIC_API_KEY = ""
         try:
-            result = analyze_jd(SAMPLE_JD)
+            with patch("autoapply.llm.get_sync_client", side_effect=ImportError("no key")):
+                result = analyze_jd(SAMPLE_JD)
         finally:
             mod.ANTHROPIC_API_KEY = orig
         kws = [k.lower() for k in result["keywords"]]
@@ -67,22 +70,18 @@ class TestJdAnalyzer:
         orig = mod.ANTHROPIC_API_KEY
         mod.ANTHROPIC_API_KEY = ""
         try:
-            result = analyze_jd("")
+            with patch("autoapply.llm.get_sync_client", side_effect=ImportError("no key")):
+                result = analyze_jd("")
         finally:
             mod.ANTHROPIC_API_KEY = orig
         assert isinstance(result, dict)
 
     def test_claude_failure_returns_empty_structured(self):
         from autoapply.resume.jd_analyzer import _claude_analyze
-        import autoapply.resume.jd_analyzer as mod
-        orig = mod.ANTHROPIC_API_KEY
-        mod.ANTHROPIC_API_KEY = "fake"
-        try:
-            with patch("autoapply.resume.jd_analyzer.anthropic") as m:
-                m.Anthropic.return_value.messages.create.side_effect = Exception("API down")
-                result = _claude_analyze(SAMPLE_JD)
-        finally:
-            mod.ANTHROPIC_API_KEY = orig
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = Exception("API down")
+        with patch("autoapply.llm.get_sync_client", return_value=mock_client):
+            result = _claude_analyze(SAMPLE_JD)
         assert result == {}
 
     def test_claude_result_merged_into_analysis(self):
@@ -135,33 +134,40 @@ class TestRagTailor:
             resume_path = os.path.join(tmpdir, "master.tex")
             Path(resume_path).write_text(SAMPLE_LATEX, encoding="utf-8")
 
-            # Mock the AIResumeTailorAsync
+            # Mock the AIResumeTailorAsync with resume_data (JSON pipeline)
             mock_result = MagicMock()
-            mock_result.tailored_latex = SAMPLE_LATEX
+            mock_result.resume_data = {"name": "Test User", "experience": []}
             mock_result.keyword_coverage = 85.0
+            mock_result.matched_keywords = ["Python"]
+            mock_result.missing_keywords = []
 
             with patch("autoapply.resume.rag_tailor.AIResumeTailorAsync") as MockTailor:
                 instance = MockTailor.return_value
                 instance.tailor = AsyncMock(return_value=mock_result)
 
-                with patch("autoapply.resume.rag_tailor.compile_pdf",
-                           new=AsyncMock(return_value=os.path.join(tmpdir, "out.pdf"))):
-                    tex, pdf, result = await mod.tailor_resume_for_job(
+                with (
+                    patch("autoapply.resume.rag_tailor.render_resume_html",
+                          return_value="<html>resume</html>"),
+                    patch("autoapply.resume.rag_tailor.html_to_pdf",
+                          new=AsyncMock(return_value=os.path.join(tmpdir, "out.pdf"))),
+                ):
+                    html_path, pdf, result = await mod.tailor_resume_for_job(
                         jd_text=SAMPLE_JD,
                         job_uuid="test-uuid-001",
                         master_resume_path=resume_path,
                         use_cache=False,
                     )
 
-            assert tex.endswith(".tex")
+            assert html_path.endswith(".html")
             assert result is mock_result
-            assert Path(tex).exists()
+            assert Path(html_path).exists()
 
         mod.RESUME_OUTPUT_DIR = orig_output
 
     @pytest.mark.asyncio
     async def test_cache_hit_skips_api_call(self):
         import autoapply.resume.rag_tailor as mod
+        import json as json_mod
         orig_output = mod.RESUME_OUTPUT_DIR
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -170,17 +176,21 @@ class TestRagTailor:
             resume_path = os.path.join(tmpdir, "master.tex")
             Path(resume_path).write_text(SAMPLE_LATEX, encoding="utf-8")
 
-            # Pre-populate the cache
+            # Pre-populate the cache with JSON data (new pipeline)
             from autoapply.resume.rag_tailor import _jd_cache_key, _cache_path
             cache_key = _jd_cache_key(SAMPLE_JD, resume_path)
             cached = _cache_path(cache_key)
             cached.parent.mkdir(parents=True, exist_ok=True)
-            cached.write_text(SAMPLE_LATEX, encoding="utf-8")
+            cached.write_text(json_mod.dumps({"name": "Cached User"}), encoding="utf-8")
 
             with patch("autoapply.resume.rag_tailor.AIResumeTailorAsync") as MockTailor:
-                with patch("autoapply.resume.rag_tailor.compile_pdf",
-                           new=AsyncMock(return_value=os.path.join(tmpdir, "cached.pdf"))):
-                    tex, pdf, result = await mod.tailor_resume_for_job(
+                with (
+                    patch("autoapply.resume.rag_tailor.render_resume_html",
+                          return_value="<html>cached</html>"),
+                    patch("autoapply.resume.rag_tailor.html_to_pdf",
+                          new=AsyncMock(return_value=os.path.join(tmpdir, "cached.pdf"))),
+                ):
+                    html_path, pdf, result = await mod.tailor_resume_for_job(
                         jd_text=SAMPLE_JD,
                         job_uuid="cached-uuid",
                         master_resume_path=resume_path,
@@ -204,7 +214,7 @@ class TestRagTailor:
             )
 
     @pytest.mark.asyncio
-    async def test_empty_tailored_latex_raises(self):
+    async def test_empty_resume_data_raises(self):
         import autoapply.resume.rag_tailor as mod
         orig_output = mod.RESUME_OUTPUT_DIR
 
@@ -214,7 +224,7 @@ class TestRagTailor:
             Path(resume_path).write_text(SAMPLE_LATEX, encoding="utf-8")
 
             mock_result = MagicMock()
-            mock_result.tailored_latex = ""   # empty → should raise
+            mock_result.resume_data = {}   # empty → should raise
 
             with patch("autoapply.resume.rag_tailor.AIResumeTailorAsync") as MockTailor:
                 instance = MockTailor.return_value
