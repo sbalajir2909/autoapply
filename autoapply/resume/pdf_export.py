@@ -80,19 +80,32 @@ async def _compile_local(tex_path: str, pdf_path: str) -> bool:
         return False
 
 
-async def _compile_online(tex_content: str) -> Optional[bytes]:
-    """Use ytotech API for online LaTeX→PDF compilation."""
-    try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(
-                "https://latex.ytotech.com/builds/sync",
-                json={
-                    "compiler": "pdflatex",
-                    "resources": [{"main": True, "content": tex_content}],
-                },
-            )
-            if response.status_code == 200:
-                return response.content
-    except Exception as e:
-        print(f"[PDFExport] Online compilation failed: {e}")
+async def _compile_online(tex_content: str, max_retries: int = 2) -> Optional[bytes]:
+    """Use ytotech API for online LaTeX→PDF compilation with retry."""
+    for attempt in range(max_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                response = await client.post(
+                    "https://latex.ytotech.com/builds/sync",
+                    json={
+                        "compiler": "pdflatex",
+                        "resources": [{"main": True, "content": tex_content}],
+                    },
+                )
+                if response.status_code == 200:
+                    return response.content
+                if response.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
+                    delay = 3 * (attempt + 1)
+                    print(f"[PDFExport] Online API returned {response.status_code}, retrying in {delay}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                print(f"[PDFExport] Online API returned {response.status_code}")
+                return None
+        except httpx.TransportError as e:
+            if attempt < max_retries:
+                delay = 3 * (attempt + 1)
+                print(f"[PDFExport] Transport error: {e}, retrying in {delay}s...")
+                await asyncio.sleep(delay)
+                continue
+            print(f"[PDFExport] Online compilation failed after {max_retries + 1} attempts: {e}")
     return None

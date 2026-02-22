@@ -16,6 +16,7 @@ from .filler import fill_form, fuzzy_match_field
 from .strategies import get_strategy
 from ..config import AUTO_SUBMIT_ATS, SCREENSHOT_DIR, CANDIDATE_PROFILE
 from ..storage.database import update_status
+from ..events import emit, EventType
 
 
 async def decide_and_submit(
@@ -25,6 +26,7 @@ async def decide_and_submit(
     resume_pdf_path: str,
     profile: Dict = None,
     dry_run: bool = False,
+    auto_mode: bool = False,
 ) -> Tuple[bool, str]:
     """
     Choose the right strategy for the ATS, fill the form, and either
@@ -49,30 +51,58 @@ async def decide_and_submit(
     strategy_cls = get_strategy(ats)
     strategy = strategy_cls()
 
+    emit(EventType.SUBMIT_DECISION,
+         f"Strategy: {strategy_cls.__name__} (ATS={ats}, auto_submit={strategy.auto_submit}, dry_run={dry_run})",
+         ats=ats, strategy=strategy_cls.__name__,
+         auto_submit=strategy.auto_submit, dry_run=dry_run,
+         job_uuid=job_uuid)
+
     print(f"[Submitter] ATS={ats}, auto_submit={strategy.auto_submit}, dry_run={dry_run}")
 
     if dry_run:
+        emit(EventType.SUBMIT_DRY_RUN,
+             "DRY RUN — filling form but not submitting",
+             job_uuid=job_uuid)
         print("[Submitter] DRY RUN — filling form but not submitting")
         # Just fill, don't submit
         try:
             await fill_form(page, page_analysis.form_fields, resume_pdf_path, profile)
         except Exception as e:
+            emit(EventType.ERROR, f"Dry-run fill error: {e}",
+                 job_uuid=job_uuid, error=str(e))
             print(f"[Submitter] Dry-run fill error: {e}")
         return False, "dry_run"
 
     # Execute the ATS strategy
     try:
+        emit(EventType.INFO,
+             f"Executing {strategy_cls.__name__} strategy...",
+             strategy=strategy_cls.__name__, job_uuid=job_uuid)
         submitted = await strategy.execute(page, page_analysis, resume_pdf_path, profile)
     except Exception as e:
+        emit(EventType.SUBMIT_ERROR,
+             f"Strategy execution error: {e}",
+             strategy=strategy_cls.__name__, error=str(e), job_uuid=job_uuid)
         print(f"[Submitter] Strategy execution error: {e}")
         submitted = False
 
-    if submitted and strategy.auto_submit:
+    if submitted and (strategy.auto_submit or auto_mode):
+        emit(EventType.SUBMIT_AUTO,
+             f"Auto-submitted via {strategy_cls.__name__}!" + (" (auto_mode)" if auto_mode else ""),
+             strategy=strategy_cls.__name__, job_uuid=job_uuid)
         update_status(job_uuid, "applied", tailored_resume_path=resume_pdf_path)
         return True, "applied"
 
     # Queue for dashboard review
+    emit(EventType.PAGE_SCREENSHOT,
+         "Taking screenshot of filled form for dashboard...",
+         job_uuid=job_uuid)
     screenshot_path = await _take_screenshot(page, job_uuid)
+    if screenshot_path:
+        emit(EventType.PAGE_SCREENSHOT,
+             f"Screenshot saved: {screenshot_path}",
+             path=screenshot_path, job_uuid=job_uuid)
+
     form_data = _serialize_form_state(page_analysis, profile)
 
     update_status(
@@ -82,6 +112,10 @@ async def decide_and_submit(
         screenshot_path=screenshot_path,
         form_data=form_data,
     )
+
+    emit(EventType.SUBMIT_QUEUED,
+         f"Queued for dashboard review (screenshot + form data saved)",
+         job_uuid=job_uuid, screenshot=screenshot_path)
     print(f"[Submitter] Queued for dashboard review: {job_uuid}")
     return False, "pending_review"
 

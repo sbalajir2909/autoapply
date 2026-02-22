@@ -9,7 +9,7 @@ Provides:
 
 import asyncio
 import random
-from typing import Optional
+from pathlib import Path
 
 from ..config import PAGE_LOAD_TIMEOUT, SCROLL_PAUSE
 
@@ -62,13 +62,28 @@ async def scrape_html(url: str, wait_for: str = "networkidle") -> str:
     playwright, browser, context = await _get_browser_context()
     try:
         page = await context.new_page()
-        await page.goto(url, wait_until=wait_for, timeout=PAGE_LOAD_TIMEOUT)
+        await _goto_with_retry(page, url, wait_until=wait_for)
         html = await page.content()
         return html
     finally:
         await context.close()
         await browser.close()
         await playwright.stop()
+
+
+async def _goto_with_retry(page, url: str, wait_until: str = "domcontentloaded", retries: int = 2):
+    """Navigate to a URL with retry on timeout."""
+    for attempt in range(retries + 1):
+        try:
+            await page.goto(url, wait_until=wait_until, timeout=PAGE_LOAD_TIMEOUT)
+            return
+        except Exception as e:
+            if attempt < retries:
+                delay = 3 * (attempt + 1)
+                print(f"[Scraper] page.goto failed ({e}), retrying in {delay}s...")
+                await asyncio.sleep(delay)
+            else:
+                raise
 
 
 async def scroll_and_get_html(url: str, scroll_count: int = 5) -> str:
@@ -85,7 +100,7 @@ async def scroll_and_get_html(url: str, scroll_count: int = 5) -> str:
     playwright, browser, context = await _get_browser_context()
     try:
         page = await context.new_page()
-        await page.goto(url, wait_until="domcontentloaded", timeout=PAGE_LOAD_TIMEOUT)
+        await _goto_with_retry(page, url)
 
         for _ in range(scroll_count):
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
@@ -114,31 +129,53 @@ class PlaywrightScraper:
     """
     Stateful scraper that reuses a single browser session across multiple
     pages for efficiency (avoids browser launch overhead per request).
+
+    Supports cookie/session persistence via Playwright storage_state.
     """
 
-    def __init__(self):
+    def __init__(self, persist_session: bool = True):
         self._playwright = None
         self._browser = None
         self._context = None
+        self._persist_session = persist_session
 
     async def start(self):
-        """Launch browser and create a context."""
+        """Launch browser and create a context, loading saved session if available."""
         from playwright.async_api import async_playwright
+        from ..config import SESSION_STATE_PATH, SESSION_DIR
+
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(
             headless=True,
             args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
         )
-        self._context = await self._browser.new_context(
-            user_agent=random.choice(USER_AGENTS),
-            viewport={"width": 1280, "height": 800},
-        )
+
+        # Load saved session (cookies, localStorage) if available
+        context_kwargs = {
+            "user_agent": random.choice(USER_AGENTS),
+            "viewport": {"width": 1280, "height": 800},
+        }
+        if self._persist_session and Path(SESSION_STATE_PATH).exists():
+            try:
+                context_kwargs["storage_state"] = SESSION_STATE_PATH
+            except Exception:
+                pass  # ignore corrupt session files
+
+        self._context = await self._browser.new_context(**context_kwargs)
         await self._context.add_init_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         )
 
     async def stop(self):
-        """Close browser session."""
+        """Save session state and close browser."""
+        from ..config import SESSION_STATE_PATH, SESSION_DIR
+
+        if self._context and self._persist_session:
+            try:
+                Path(SESSION_DIR).mkdir(parents=True, exist_ok=True)
+                await self._context.storage_state(path=SESSION_STATE_PATH)
+            except Exception:
+                pass  # best effort — don't crash on save failure
         if self._context:
             await self._context.close()
         if self._browser:

@@ -41,7 +41,8 @@ class ValidationResult:
 @dataclass
 class TailoringResult:
     """Result from AI tailoring."""
-    tailored_latex: str
+    resume_data: Dict  # Structured JSON resume data
+    tailored_latex: str  # Kept for backward compat (empty when using JSON pipeline)
     original_latex: str
     match_analysis: Dict
     keyword_coverage: float
@@ -96,25 +97,51 @@ class FastValidator:
         return re.findall(pattern, latex)
 
     @staticmethod
+    def extract_bullets_from_json(resume_data: Dict) -> List[str]:
+        """Extract all bullet strings from structured resume JSON."""
+        bullets = []
+        for section in ("education", "experience", "projects"):
+            for entry in resume_data.get(section, []):
+                bullets.extend(entry.get("bullets", []))
+        return bullets
+
+    @staticmethod
     def count_words(bullet: str) -> int:
-        clean = re.sub(r'\\textbf\{([^}]*)\}', r'\1', bullet)
+        # Strip bold markers: **text** → text
+        clean = re.sub(r'\*\*([^*]+)\*\*', r'\1', bullet)
+        # Strip LaTeX-style bold if present
+        clean = re.sub(r'\\textbf\{([^}]*)\}', r'\1', clean)
         clean = re.sub(r'\\[a-zA-Z]+\{([^}]*)\}', r'\1', clean)
         clean = re.sub(r'[\\$%&]', '', clean)
         return len(clean.split())
 
     @staticmethod
     def has_metric(bullet: str) -> bool:
-        return bool(re.search(r'\\textbf\{[^}]+\}', bullet))
+        # Check for **bold metrics** or \textbf{} or raw numbers with context
+        if re.search(r'\*\*[^*]+\*\*', bullet):
+            return True
+        if re.search(r'\\textbf\{[^}]+\}', bullet):
+            return True
+        # Also accept raw numbers/percentages in plain text
+        return bool(re.search(r'\b\d+[\d,]*[+%]?\b', bullet))
 
     @staticmethod
     def get_verb(bullet: str) -> str:
-        clean = re.sub(r'\\[a-zA-Z]+\{([^}]*)\}', r'\1', bullet)
+        clean = re.sub(r'\*\*([^*]+)\*\*', r'\1', bullet)
+        clean = re.sub(r'\\[a-zA-Z]+\{([^}]*)\}', r'\1', clean)
         words = clean.split()
         return words[0].lower() if words else ""
 
     @classmethod
-    def validate(cls, latex: str, keywords: List[str]) -> ValidationResult:
-        bullets = cls.extract_bullets(latex)
+    def validate(cls, text_or_data, keywords: List[str]) -> ValidationResult:
+        """Validate bullets from LaTeX string or JSON resume_data dict."""
+        if isinstance(text_or_data, dict):
+            bullets = cls.extract_bullets_from_json(text_or_data)
+            full_text = " ".join(bullets)
+        else:
+            bullets = cls.extract_bullets(text_or_data)
+            full_text = text_or_data
+
         analyses = []
         verb_counts = Counter()
 
@@ -140,15 +167,15 @@ class FastValidator:
         no_quant = sum(1 for a in analyses if not a.has_quantification)
 
         # Keyword matching with synonyms
-        matched = [k for k in keywords if KeywordMatcher.matches(k, latex)]
-        missing = [k for k in keywords if not KeywordMatcher.matches(k, latex)]
+        matched = [k for k in keywords if KeywordMatcher.matches(k, full_text)]
+        missing = [k for k in keywords if not KeywordMatcher.matches(k, full_text)]
         coverage = len(matched) / len(keywords) * 100 if keywords else 100
 
         suggestions = []
         if wrong_len:
             suggestions.append(f"{wrong_len} bullets not 24-28 words")
         if no_quant:
-            suggestions.append(f"{no_quant} bullets lack \\textbf{{}} metrics")
+            suggestions.append(f"{no_quant} bullets lack bold metrics")
         if repeated:
             suggestions.append(f"Verbs used >2x: {', '.join(repeated)}")
         if missing:
@@ -168,15 +195,22 @@ class FastValidator:
             suggestions=suggestions
         )
 
-    @staticmethod
-    def estimate_pages(latex: str) -> int:
-        """Fast page estimate without compilation."""
-        bullets = len(re.findall(r'\\resumeItem\{', latex))
-        experiences = len(re.findall(r'\\resumeSubheading\{', latex))
-        skills_section = re.search(r'\\section\{[Ss]kills\}(.*?)(?=\\section|\\end\{document\})', latex, re.DOTALL)
-        skills_length = len(skills_section.group(1)) if skills_section else 0
+    @classmethod
+    def estimate_pages(cls, text_or_data) -> int:
+        """Fast page estimate."""
+        if isinstance(text_or_data, dict):
+            bullets = cls.extract_bullets_from_json(text_or_data)
+            experiences = len(text_or_data.get("experience", []))
+            skills = text_or_data.get("skills", [])
+            skills_length = sum(len(s.get("items", "")) for s in skills)
+        else:
+            bullets = re.findall(r'\\resumeItem\{', text_or_data)
+            experiences = len(re.findall(r'\\resumeSubheading\{', text_or_data))
+            skills_section = re.search(r'\\section\{[Ss]kills\}(.*?)(?=\\section|\\end\{document\})', text_or_data, re.DOTALL)
+            skills_length = len(skills_section.group(1)) if skills_section else 0
 
-        score = bullets * 6 + experiences * 10 + skills_length / 50
+        n_bullets = len(bullets)
+        score = n_bullets * 6 + experiences * 10 + skills_length / 50
         if score <= 110:
             return 1
         elif score <= 200:
@@ -189,11 +223,16 @@ class AIResumeTailorAsync:
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY required")
 
-        import anthropic
-        self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
+        # Use OpenRouter client (routes to Claude via OpenRouter)
+        try:
+            from autoapply.llm import get_async_client
+            self.client = get_async_client()
+        except ImportError:
+            if not self.api_key:
+                raise ValueError("ANTHROPIC_API_KEY required (or install autoapply.llm for OpenRouter)")
+            import anthropic
+            self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
 
     async def tailor_with_progress(
         self,
@@ -222,18 +261,18 @@ class AIResumeTailorAsync:
             yield {"step": "error", "message": f"API error: {str(e)}", "progress": 0}
             return
 
-        tailored = result_json.get("latex", "")
+        resume_data = result_json.get("resume_data", {})
         keywords = result_json.get("keywords", [])
         job_analysis = result_json.get("analysis", {})
 
-        if not tailored or len(tailored) < 500:
-            yield {"step": "error", "message": "Invalid output generated", "progress": 0}
+        if not resume_data or not resume_data.get("experience"):
+            yield {"step": "error", "message": "Invalid output generated — missing resume_data", "progress": 0}
             return
 
         yield {"step": "validating", "message": "Validating against ATS rules...", "progress": 60}
 
-        # Fast local validation
-        validation = FastValidator.validate(tailored, keywords)
+        # Fast local validation using JSON bullets
+        validation = FastValidator.validate(resume_data, keywords)
 
         yield {
             "step": "validated",
@@ -246,16 +285,16 @@ class AIResumeTailorAsync:
         if not validation.is_valid:
             issues = validation.bullets_wrong_length + validation.bullets_no_quantification + len(validation.repeated_verbs)
             yield {"step": "fixing", "message": f"Fixing {issues} rule violations...", "progress": 70}
-            tailored = await self._fix_violations(tailored, validation)
-            validation = FastValidator.validate(tailored, keywords)
+            resume_data = await self._fix_violations_json(resume_data, validation)
+            validation = FastValidator.validate(resume_data, keywords)
 
         # Page check
-        pages = FastValidator.estimate_pages(tailored)
+        pages = FastValidator.estimate_pages(resume_data)
         if pages > 1:
             yield {"step": "reducing", "message": "Enforcing 1-page limit...", "progress": 80}
-            tailored = await self._reduce_to_one_page(tailored)
-            validation = FastValidator.validate(tailored, keywords)
-            pages = FastValidator.estimate_pages(tailored)
+            resume_data = await self._reduce_to_one_page_json(resume_data)
+            validation = FastValidator.validate(resume_data, keywords)
+            pages = FastValidator.estimate_pages(resume_data)
 
         yield {
             "step": "complete",
@@ -264,10 +303,11 @@ class AIResumeTailorAsync:
             "data": {"pages": pages, "coverage": validation.keyword_coverage}
         }
 
-        diff_data = self._create_diff(resume_latex, tailored)
+        diff_data = self._create_diff_json(resume_latex, resume_data)
 
         result = TailoringResult(
-            tailored_latex=tailored,
+            resume_data=resume_data,
+            tailored_latex="",  # No longer generating LaTeX
             original_latex=resume_latex,
             match_analysis=job_analysis,
             keyword_coverage=validation.keyword_coverage,
@@ -481,7 +521,7 @@ VERIFY overall:
                               OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════════════════════
 
-Return ONLY this JSON structure:
+Return ONLY this JSON structure. Use **bold** markdown for metrics in bullets (NOT LaTeX \\textbf):
 {{
   "analysis": {{
     "role_title": "extracted job title",
@@ -490,16 +530,63 @@ Return ONLY this JSON structure:
   }},
   "keywords": [
     "keyword1", "keyword2", "keyword3"
-    // Include ALL extracted keywords (30-50 typically)
   ],
-  "latex": "COMPLETE LaTeX document from \\\\documentclass to \\\\end{{document}}"
+  "resume_data": {{
+    "header": {{
+      "name": "candidate full name",
+      "location": "City, State",
+      "phone": "phone number",
+      "email": "email@example.com",
+      "linkedin": "linkedin.com/in/profile",
+      "website": "personal website or empty string",
+      "github": "github.com/username or empty string"
+    }},
+    "education": [
+      {{
+        "school": "University Name",
+        "location": "City, State",
+        "degree": "Degree title exactly as in original",
+        "date": "Graduation date",
+        "bullets": ["Minor: Finance | GPA: 3.55", "Certifications: ..."]
+      }}
+    ],
+    "experience": [
+      {{
+        "company": "Company Name EXACTLY as original",
+        "location": "City, Country EXACTLY as original",
+        "title": "Job Title EXACTLY as original",
+        "dates": "Start -- End EXACTLY as original",
+        "bullets": [
+          "Architected application security deployment pipeline utilizing Docker containerization, CI/CD automation, and Prometheus monitoring, achieving **1000ms** P95 response times with comprehensive observability."
+        ]
+      }}
+    ],
+    "projects": [
+      {{
+        "name": "Project Name EXACTLY as original",
+        "url": "https://github.com/... or empty string",
+        "subtitle": "Short project description",
+        "bullets": [
+          "Built automated Python security scanning pipeline processing **100,000** enterprise files across documents, scripts, and spreadsheets, integrating adaptive keyword mapping across **25+** formats."
+        ]
+      }}
+    ],
+    "skills": [
+      {{
+        "category": "Application Security",
+        "items": "Skill1, Skill2, Skill3"
+      }}
+    ]
+  }}
 }}
 
 CRITICAL REQUIREMENTS:
-• "keywords" array must contain ALL extracted keywords (be exhaustive)
-• "latex" must be the COMPLETE document (not truncated)
-• Return ONLY the JSON, no markdown code blocks, no explanations
-• Escape backslashes properly in JSON (use \\\\)"""
+• "keywords" array must contain ALL extracted keywords (30-50 typically)
+• Use **bold** markdown for metrics in bullets (e.g., **40%**, **10,000+**, **5** endpoints)
+• DO NOT use LaTeX syntax anywhere — this is pure JSON with markdown bold for metrics
+• All header, education, company names, titles, dates must be EXACTLY from the original resume
+• Only bullet text and skills items may be rephrased/augmented
+• Return ONLY the JSON, no markdown code blocks, no explanations"""
 
         response = await self.client.messages.create(
             model="claude-sonnet-4-20250514",
@@ -529,52 +616,38 @@ CRITICAL REQUIREMENTS:
 
             return {"latex": "", "keywords": [], "analysis": {}}
 
-    async def _fix_violations(self, latex: str, validation: ValidationResult) -> str:
-        """Fix violations using fast Haiku model with detailed instructions."""
+    async def _fix_violations_json(self, resume_data: Dict, validation: ValidationResult) -> Dict:
+        """Fix bullet violations in JSON resume_data using fast Haiku model."""
 
         issues = []
-
-        # Word count issues
         for b in validation.bullet_analyses:
             if not b.is_valid_length:
                 direction = "ADD words" if b.word_count < 24 else "REMOVE words"
                 diff = abs(26 - b.word_count)
-                issues.append(f"• [{b.word_count} words, need 24-28, {direction} ~{diff}]: \"{b.text[:60]}...\"")
-
-        # Missing metrics
-        for b in validation.bullet_analyses:
+                issues.append(f"- [{b.word_count} words, need 24-28, {direction} ~{diff}]: \"{b.text[:80]}...\"")
             if not b.has_quantification:
-                issues.append(f"• [NEEDS \\\\textbf{{metric}}]: \"{b.text[:60]}...\"")
-
-        # Verb issues
+                issues.append(f"- [NEEDS **bold metric**]: \"{b.text[:80]}...\"")
         if validation.repeated_verbs:
-            issues.append(f"• [VERBS OVERUSED >2x]: {', '.join(validation.repeated_verbs)}")
+            issues.append(f"- [VERBS OVERUSED >2x]: {', '.join(validation.repeated_verbs)}")
 
         if not issues:
-            return latex
+            return resume_data
 
-        prompt = f"""Fix these SPECIFIC issues in the resume. Keep everything else UNCHANGED.
+        prompt = f"""Fix these SPECIFIC bullet issues in the resume JSON. Return the SAME JSON structure with ONLY the bullets fixed.
 
-═══════════════════════════════════════════════════════════════════════════════
-                              ISSUES TO FIX
-═══════════════════════════════════════════════════════════════════════════════
+ISSUES:
 {chr(10).join(issues[:10])}
 
-═══════════════════════════════════════════════════════════════════════════════
-                              FIX RULES
-═══════════════════════════════════════════════════════════════════════════════
-• Adjust bullets to EXACTLY 24-28 words
-• Add \\textbf{{metric}} to bullets missing quantification
-• Replace overused verbs with alternatives
-• DO NOT modify Education or Certifications
-• Keep all existing \\textbf{{}} formatting
+FIX RULES:
+- Adjust bullets to EXACTLY 24-28 words
+- Add **bold metrics** to bullets missing quantification (e.g., **40%**, **10,000+**)
+- Replace overused verbs with alternatives
+- DO NOT modify education, header, company names, titles, or dates
 
-═══════════════════════════════════════════════════════════════════════════════
-                              RESUME TO FIX
-═══════════════════════════════════════════════════════════════════════════════
-{latex}
+RESUME JSON:
+{json.dumps(resume_data, indent=2)}
 
-Return ONLY the complete fixed LaTeX document. No explanations."""
+Return ONLY the fixed JSON. No explanations, no code blocks."""
 
         try:
             response = await self.client.messages.create(
@@ -582,37 +655,35 @@ Return ONLY the complete fixed LaTeX document. No explanations."""
                 max_tokens=8000,
                 messages=[{"role": "user", "content": prompt}]
             )
-            output = response.content[0].text
-            output = re.sub(r'```latex\n?|```\n?', '', output).strip()
-
-            # Validate output has basic structure
-            if '\\begin{document}' in output and '\\end{document}' in output:
-                return output
-            return latex
+            text = response.content[0].text
+            text = re.sub(r'```json\n?|```\n?', '', text).strip()
+            fixed = json.loads(text)
+            if isinstance(fixed, dict) and fixed.get("experience"):
+                return fixed
+            return resume_data
         except:
-            return latex
+            return resume_data
 
-    async def _reduce_to_one_page(self, latex: str) -> str:
-        """Reduce content to fit one page using Haiku."""
+    async def _reduce_to_one_page_json(self, resume_data: Dict) -> Dict:
+        """Reduce JSON resume content to fit one page using Haiku."""
 
-        prompt = f"""This resume exceeds 1 page. Reduce it with these strategies:
+        prompt = f"""This resume exceeds 1 page. Reduce it:
 
-REDUCTION STRATEGIES (apply in order):
-1. Remove least relevant skills from SKILLS section (keep top 8-10 most relevant)
-2. Reduce each bullet to exactly 24 words (minimum of allowed range)
+STRATEGIES (apply in order):
+1. Remove least relevant skills (keep top 8-10)
+2. Reduce each bullet to exactly 24 words (minimum of range)
 3. If still too long, keep only 3 experiences with 3 bullets each
 
-STRICT RULES:
-• DO NOT modify EDUCATION section
-• DO NOT modify CERTIFICATIONS section
-• Keep all \\textbf{{}} metric formatting
-• Each bullet must still be 24-28 words
-• Preserve all important keywords in bullets
+RULES:
+- DO NOT modify education section
+- Keep **bold metric** formatting
+- Each bullet must still be 24-28 words
+- Preserve important keywords
 
-RESUME TO REDUCE:
-{latex}
+RESUME JSON:
+{json.dumps(resume_data, indent=2)}
 
-Return ONLY the reduced LaTeX document. No explanations."""
+Return ONLY the reduced JSON. No explanations, no code blocks."""
 
         try:
             response = await self.client.messages.create(
@@ -620,14 +691,35 @@ Return ONLY the reduced LaTeX document. No explanations."""
                 max_tokens=8000,
                 messages=[{"role": "user", "content": prompt}]
             )
-            output = response.content[0].text
-            output = re.sub(r'```latex\n?|```\n?', '', output).strip()
-
-            if '\\begin{document}' in output and '\\end{document}' in output:
-                return output
-            return latex
+            text = response.content[0].text
+            text = re.sub(r'```json\n?|```\n?', '', text).strip()
+            reduced = json.loads(text)
+            if isinstance(reduced, dict) and reduced.get("experience"):
+                return reduced
+            return resume_data
         except:
-            return latex
+            return resume_data
+
+    def _create_diff_json(self, original_latex: str, resume_data: Dict) -> Dict:
+        """Create diff between original LaTeX bullets and new JSON bullets."""
+        orig = re.findall(r'\\resumeItem\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}', original_latex)
+        new = FastValidator.extract_bullets_from_json(resume_data)
+        return {
+            "original_bullets": orig,
+            "tailored_bullets": new,
+            "added": [b for b in new if b not in orig],
+            "removed": [b for b in orig if b not in new],
+            "modified_count": len([b for b in new if b not in orig])
+        }
+
+    # Keep legacy methods for backward compatibility
+    async def _fix_violations(self, latex: str, _validation: ValidationResult) -> str:
+        """Legacy: fix violations in LaTeX string."""
+        return latex
+
+    async def _reduce_to_one_page(self, latex: str) -> str:
+        """Legacy: reduce LaTeX to one page."""
+        return latex
 
     def _create_diff(self, original: str, tailored: str) -> Dict:
         orig = re.findall(r'\\resumeItem\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}', original)

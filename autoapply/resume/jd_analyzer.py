@@ -66,11 +66,16 @@ def _claude_analyze(jd_text: str) -> Dict[str, Any]:
     Call Claude Haiku for fast structured JD analysis.
     Returns empty dict on failure (graceful degradation).
     """
-    if not ANTHROPIC_API_KEY or anthropic is None:
-        return {}
+    # Use OpenRouter client
+    try:
+        from ..llm import get_sync_client
+        client = get_sync_client()
+    except ImportError:
+        if not ANTHROPIC_API_KEY or anthropic is None:
+            return {}
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
     try:
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
         prompt = f"""Analyze this job description and return ONLY a JSON object with these fields:
 {{
@@ -93,9 +98,33 @@ Return ONLY the JSON. No explanation."""
             messages=[{"role": "user", "content": prompt}],
         )
         text = response.content[0].text.strip()
-        text = re.sub(r"```json\n?|```\n?", "", text).strip()
-        return json.loads(text)
+        result = _safe_parse_json(text)
+        if result is None:
+            print("[JDAnalyzer] Could not parse JSON from LLM response")
+            return {}
+        return result
 
+    except json.JSONDecodeError as e:
+        print(f"[JDAnalyzer] JSON parse error: {e}")
+        return {}
     except Exception as e:
         print(f"[JDAnalyzer] Claude call failed: {e}")
         return {}
+
+
+def _safe_parse_json(text: str) -> Dict[str, Any] | None:
+    """Try to extract valid JSON from LLM response text."""
+    text = re.sub(r"```json\n?|```\n?", "", text).strip()
+    try:
+        data = json.loads(text)
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        pass
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if match:
+        try:
+            data = json.loads(match.group())
+            return data if isinstance(data, dict) else None
+        except json.JSONDecodeError:
+            pass
+    return None

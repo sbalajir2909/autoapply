@@ -1,102 +1,174 @@
-% Master Resume Template
-% Replace this with your actual resume content
+\documentclass[letterpaper,1pt]{article}
 
-\documentclass[10pt,letterpaper]{article}
-
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{lmodern}
-\usepackage[top=0.5in,bottom=0.5in,left=0.5in,right=0.5in]{geometry}
-\usepackage{enumitem}
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
 \usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
 \usepackage{hyperref}
+% \usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage{tabularx}
+\usepackage{multicol}
+\usepackage{ragged2e}
+\usepackage[T1]{fontenc}  % Added for better font encoding
+\usepackage{microtype}    % Added for better typography
 
-\pagestyle{empty}
-\setlength{\parindent}{0pt}
-\setlength{\parskip}{0pt}
+% Input glyph-to-unicode mapping
+\input{glyphtounicode}
+\pdfgentounicode=1       % Enable generation of unicode mapping
 
-\titleformat{\section}{\large\bfseries}{}{0em}{}[\titlerule]
-\titlespacing*{\section}{0pt}{6pt}{6pt}
+\pagestyle{fancy}
+\fancyhf{} % clear all header and footer fields
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
 
-\setlist[itemize]{noitemsep, topsep=0pt, parsep=0pt, partopsep=0pt, leftmargin=*}
+% Adjust margins
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1in}
+\addtolength{\topmargin}{-.5in}
+\addtolength{\textheight}{1.0in}
+
+\urlstyle{same}
+
+\raggedbottom
+\setlength{\tabcolsep}{0in}
+
+% Sections formatting
+\titleformat{\section}{
+  \vspace{-4pt}\scshape\raggedright\large
+}{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
 
 % Custom commands
-\newcommand{\resumeSubheading}[4]{
-  \item
-    \begin{tabular*}{\textwidth}[t]{l@{\extracolsep{\fill}}r}
-      \textbf{#1} & #2 \\
-      \textit{#3} & \textit{#4} \\
-    \end{tabular*}
+\newcommand{\resumeItem}[1]{
+  \item\small{
+    #1 \vspace{-2pt}
+  }
 }
 
-\newcommand{\resumeItem}[1]{\item #1}
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-2pt}\item
+    \begin{tabular*}{0.97\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & \textbf{#2} \\
+      \textit{\small#3} & \textbf{\textit{\small #4}} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeSubItem}[1]{\resumeItem{#1}\vspace{-4pt}}
+
+\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.15in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-5pt}}
+
+%-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{document}
 
-% Header
+%----------HEADING----------
 \begin{center}
-    \textbf{\Huge Your Name} \\
-    \vspace{2pt}
-    your.email@email.com | (555) 123-4567 | City, State \\
-    \vspace{2pt}
-    \href{https://linkedin.com/in/yourprofile}{linkedin.com/in/yourprofile} |
-    \href{https://github.com/yourusername}{github.com/yourusername}
+    \textbf{\Large Udaya Vijay Anand} \\
+    West Lafayette, IN \\
+    +1 (774)-519-8830 $|$ \href{mailto:udaya.vijayanand@gmail.com}{udaya.vijayanand@gmail.com} $|$
+    \href{https://linkedin.com/in/udaya-vijay-anand/}{linkedin.com/in/udaya-vijay-anand}  $|$
+    \href{https://udsy.in}{udsy.in} $|$ \href{https://github.com/udsy19}{github.com/udsy19}
 \end{center}
+\vspace{-10pt}
 
-\section{Experience}
-\begin{itemize}[leftmargin=0.15in, label={}]
 
-\resumeSubheading
-    {Senior Software Engineer}{Jan 2022 -- Present}
-    {Tech Company Inc.}{San Francisco, CA}
-    \begin{itemize}[leftmargin=0.2in]
-        \resumeItem{Led development of microservices architecture using Python and AWS, reducing latency by 40\%}
-        \resumeItem{Implemented CI/CD pipelines with Jenkins and Docker, improving deployment frequency by 3x}
-        \resumeItem{Mentored team of 5 junior developers, conducting code reviews and technical training sessions}
-        \resumeItem{Designed and built RESTful APIs handling 10K+ requests per second}
-    \end{itemize}
 
-\resumeSubheading
-    {Software Engineer}{Jun 2019 -- Dec 2021}
-    {Startup Corp}{New York, NY}
-    \begin{itemize}[leftmargin=0.2in]
-        \resumeItem{Developed full-stack web applications using React and Node.js}
-        \resumeItem{Built data pipelines with Apache Kafka and PostgreSQL processing 1M+ daily events}
-        \resumeItem{Collaborated with product team to define requirements and deliver features on schedule}
-        \resumeItem{Optimized database queries resulting in 50\% reduction in response times}
-    \end{itemize}
-
-\end{itemize}
-
+%-----------EDUCATION-----------
 \section{Education}
-\begin{itemize}[leftmargin=0.15in, label={}]
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      {Purdue University - Main Campus}{West Lafayette, IN}
+      {B.Sc. in Cybersecurity and Computing Infrastructure and Network Engineering}{May 2026}
+      \resumeItemListStart
+        \resumeItem{Minor: Finance \hfill \textbf{GPA: 3.55}}
+        \resumeItem{Certifications: \href{https://www.credly.com/badges/8138de84-0f88-486c-9fd1-ecda2de3f1de/public_url}{Security+} (CompTIA), \href{https://www.credly.com/badges/2fb0a2d9-41c7-49d1-9e69-ca0e7270a1bd/public_url}{CSAP} (CompTIA), \href{https://www.credly.com/badges/990011a7-9044-4da3-b66b-03a785d41bb5/public_url}{CySA+} (CompTIA), \href{https://www.comptia.org/certifications/ceh}{CEH} (EC-Council), Dean's List (2022 - 2023)}
+       % \resumeItem{Honors: Dean's List (2022 - 2023)}
+      \resumeItemListEnd
+  \resumeSubHeadingListEnd
+
+%-----------EXPERIENCE-----------
+\section{Experience}
+  \resumeSubHeadingListStart
 
 \resumeSubheading
-    {Bachelor of Science in Computer Science}{2015 -- 2019}
-    {University of Technology}{City, State}
+      {KPMG}{\textbf{Bengaluru, India}}
+      {Cyber Defence \& Incident Response (CDIR) Intern}{\textbf{Jun 2025 -- Aug 2025}}
+      \resumeItemListStart
+        \resumeItem{Architected application security deployment pipeline utilizing Docker containerization, CI/CD automation, and Prometheus monitoring, achieving \textbf{1000ms} P95 response times with comprehensive observability.}
+        \resumeItem{Conducted incident response triage and malware analysis across Windows exploitation scenarios, implementing SIEM detection rules mapped to MITRE ATT\&CK improving \textbf{30\%} coverage.}
+        \resumeItem{Engineered asynchronous middleware processing \textbf{25-40} TPS with distributed caching, Redis session management, and Kubernetes horizontal scaling supporting \textbf{20+} concurrent WebSocket connections.}
+        \resumeItem{Developed cross-platform security guardrails middleware leveraging React TypeScript, FastAPI microservices, and multi-provider API orchestration across \textbf{5} endpoints ensuring scalable solutions.}
+      \resumeItemListEnd
 
-\end{itemize}
 
-\section{Technical Skills}
-\begin{itemize}[leftmargin=0.15in, label={}]
-    \item \textbf{Languages}: Python, JavaScript, TypeScript, Java, SQL, Go
-    \item \textbf{Frameworks}: React, Node.js, Django, Flask, FastAPI
-    \item \textbf{Cloud \& DevOps}: AWS, Docker, Kubernetes, Jenkins, Terraform, CI/CD
-    \item \textbf{Databases}: PostgreSQL, MongoDB, Redis, Elasticsearch
-    \item \textbf{Tools}: Git, Linux, Agile, Scrum, JIRA
-\end{itemize}
+ \resumeSubheading
+      {Purdue University}{\textbf{West Lafayette, IN}}
+      {Teaching Assistant, CNIT \textbf{176 \& 271} IT Architecture \& Cybersecurity Fundamentals II}{\textbf{Jan 2024 -- Aug 2025}}
+      \resumeItemListStart
+    \resumeItem{Facilitated hands-on security laboratory sessions for \textbf{75} students, developing custom network simulation exercises and distributed systems configurations enhancing cybersecurity fundamentals understanding.}
+\resumeItem{Redesigned evaluation frameworks for technical assignments across \textbf{22} students, creating detailed rubrics and personalized feedback mechanisms improving average grades by \textbf{15\%}.}
+        \resumeItem{Collaborated with instructors designing secure coding materials for hardware security implementation and system hardening techniques covering Windows, Linux, and Mac platforms.}
+      \resumeItemListEnd
 
+
+    \resumeSubheading
+      {DBS Bank}{\textbf{Mumbai, India}}
+      {Cybersecurity Intern}{\textbf{May 2024 -- Aug 2024}}
+      \resumeItemListStart
+        \resumeItem{Led application security POC implementation of Rapid7 InsightVM and Insight Agent for authenticated vulnerability scans, streamlining manual assessments and increasing detection by \textbf{25\%}.}
+        \resumeItem{Developed Python automation program utilizing Openpyxl and Pandas optimizing compliance report generation, eliminating manual intervention and increasing efficiency by \textbf{50\%} with ThreadPool parallelization.}
+        \resumeItem{Conducted comprehensive security assessments using BurpSuite, Nikto, and Wireshark, performing WiFi and web application penetration testing aligned with OWASP Top \textbf{10} standards.}
+      \resumeItemListEnd
+
+  \resumeSubHeadingListEnd
+
+
+%-----------PROJECTS-----------
 \section{Projects}
-\begin{itemize}[leftmargin=0.15in, label={}]
+ \resumeSubHeadingListStart
 
-\resumeSubheading
-    {Open Source Contribution}{2023}
-    {Popular Framework}{}
-    \begin{itemize}[leftmargin=0.2in]
-        \resumeItem{Contributed performance improvements to core library, merged into main branch}
-        \resumeItem{Fixed critical security vulnerability affecting 100K+ users}
-    \end{itemize}
+\resumeItem{\href{https://github.com/udsy19/PrivacyLens.git}{\textbf{PrivacyLens}} $|$ \textit{Automated Confidential Data Scanner for Enterprise Assets (KPMG)}}
+  \resumeItemListStart
+    \resumeItem{Built automated Python security scanning pipeline processing \textbf{100,000} enterprise files across documents, scripts, and spreadsheets, integrating adaptive keyword mapping across \textbf{25+} formats.}
+    \resumeItem{Established enterprise-grade compliance with high-fidelity PII detection and dynamic severity classification, generating \textbf{300+} actionable PDF and CSV reports for GRC audits.}
+  \resumeItemListEnd
 
-\end{itemize}
+\resumeItem{\href{https://github.com/udsy19/CloudBucket_Pentest.git}{\textbf{Advanced Cloud Security Reconnaissance Platform}} $|$ \textit{Agentic AI--Powered Accelerated Pentesting}}
+  \resumeItemListStart
+    \resumeItem{Architected enterprise-grade application security framework with \textbf{11} discovery methods including Certificate Transparency and AI analysis, processing \textbf{4+} million subdomains with comprehensive Azure assessment.}
+    \resumeItem{Built scalable security architecture executing \textbf{52+} attack scenarios covering authentication bypass and configuration vulnerabilities, integrating Foundation-Sec-8B model with intelligent failover systems ensuring privacy.}
+  \resumeItemListEnd
+
+ \resumeSubHeadingListEnd
+
+
+  %-----------SKILLS-----------
+\section{Skills}
+\resumeSubHeadingListStart
+  \resumeSubItem{
+    \textbf{Application Security:} Secure Code Development, Security Reviews, Threat Modeling, Secure Architecture Design, Code Review, Authentication/Authorization, OSWE, OSCP, GWAPT, Security Assessments, Risk Assessment
+  }
+  \resumeSubItem{
+    \textbf{Programming \& Automation:} Python, Go, C\#, Rust, Bash, PowerShell, REST APIs, HTTP-RPC, Web APIs, Scripting, Automation, FastAPI, SQL
+  }
+  \resumeSubItem{
+    \textbf{Cloud \& Infrastructure:} AWS, Azure, GCP, Cloud Security Controls, Enterprise Security Controls, System Internals, macOS, Code-signing, Enterprise Applications, Kubernetes, Docker
+  }
+  \resumeSubItem{
+    \textbf{Security Tools:} Rapid7, BurpSuite, SIEM, EDR, Vulnerability Assessment, Penetration Testing, Incident Response, Malware Analysis, Root-cause Analysis, Problem-solving, Documentation
+  }
+\resumeSubHeadingListEnd
+
 
 \end{document}

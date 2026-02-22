@@ -10,6 +10,8 @@ import hashlib
 import sqlite3
 from typing import Optional
 
+from .database import get_connection
+
 
 def generate_job_uuid(company: str, url: str, job_post_id: str = "") -> str:
     """
@@ -33,15 +35,24 @@ def generate_sig_hash(jd_text: str) -> str:
     return hashlib.md5(condensed.encode()).hexdigest()
 
 
-def is_duplicate(uuid: str, sig_hash: str, conn: sqlite3.Connection) -> bool:
+def is_duplicate(uuid: str, sig_hash: str, conn: sqlite3.Connection = None) -> bool:
     """
     Return True if a job with this uuid OR sig_hash already exists in the DB.
+    Accepts an optional connection for backwards compat; opens its own if None.
     """
-    cursor = conn.execute(
-        "SELECT 1 FROM jobs WHERE uuid = ? OR sig_hash = ?",
-        (uuid, sig_hash),
-    )
-    return cursor.fetchone() is not None
+    if conn is not None:
+        cursor = conn.execute(
+            "SELECT 1 FROM jobs WHERE uuid = ? OR sig_hash = ?",
+            (uuid, sig_hash),
+        )
+        return cursor.fetchone() is not None
+
+    with get_connection() as c:
+        cursor = c.execute(
+            "SELECT 1 FROM jobs WHERE uuid = ? OR sig_hash = ?",
+            (uuid, sig_hash),
+        )
+        return cursor.fetchone() is not None
 
 
 def extract_post_id_from_url(url: str) -> str:

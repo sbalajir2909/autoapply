@@ -55,3 +55,10 @@ output/*.pdf
 *.log
 *.aux
 *.out
+
+# Runtime data (DB, ChromaDB, sessions, screenshots)
+autoapply.db
+chroma_db/
+data/
+output/screenshots/
+output/tailored/

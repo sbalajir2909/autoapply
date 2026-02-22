@@ -18,6 +18,7 @@ from .playwright_scraper import scrape_html, scroll_and_get_html
 from .dedup_utils import _detect_ats
 from .duckduckgo import DuckDuckGoDiscovery
 from ..config import PAGE_LOAD_TIMEOUT
+from ..events import emit, EventType
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +37,12 @@ class GreenHouseScraper(BaseJobScraper):
         """
         ddg = DuckDuckGoDiscovery(queries=[f"site:boards.greenhouse.io {query}"])
         listings = await ddg.discover(max_per_query=max_results)
+        for l in listings:
+            emit(EventType.SEARCH_RESULT,
+                 f"[Greenhouse] {l.company} — {l.title}",
+                 listing={"title": l.title, "company": l.company,
+                          "url": l.url, "ats_platform": "greenhouse"},
+                 board="greenhouse")
         return listings
 
     async def fetch_job_description(self, url: str) -> str:
@@ -71,6 +78,11 @@ class LeverScraper(BaseJobScraper):
         listings = await ddg.discover(max_per_query=max_results)
         for l in listings:
             l.ats_platform = "lever"
+            emit(EventType.SEARCH_RESULT,
+                 f"[Lever] {l.company} — {l.title}",
+                 listing={"title": l.title, "company": l.company,
+                          "url": l.url, "ats_platform": "lever"},
+                 board="lever")
         return listings
 
     async def fetch_job_description(self, url: str) -> str:
@@ -127,14 +139,22 @@ class LinkedInScraper(BaseJobScraper):
                     # Normalize to absolute URL
                     if not link.startswith("http"):
                         link = "https://www.linkedin.com" + link
-                    listings.append(JobListing(
+                    listing = JobListing(
                         title=title,
                         company=company,
                         url=link.split("?")[0],  # strip tracking params
                         ats_platform="linkedin",
                         source="linkedin",
-                    ))
+                    )
+                    listings.append(listing)
+                    emit(EventType.SEARCH_RESULT,
+                         f"[LinkedIn] {company} — {title}",
+                         listing={"title": title, "company": company,
+                                  "url": listing.url, "ats_platform": "linkedin"},
+                         board="linkedin")
         except Exception as e:
+            emit(EventType.WARNING, f"[LinkedIn] search failed: {e}",
+                 board="linkedin", query=query, error=str(e))
             print(f"[LinkedIn] search failed for {query!r}: {e}")
 
         return listings
@@ -185,14 +205,22 @@ class IndeedScraper(BaseJobScraper):
                 link = "https://www.indeed.com" + link_el["href"] if link_el else ""
 
                 if link and title:
-                    listings.append(JobListing(
+                    listing = JobListing(
                         title=title,
                         company=company,
                         url=link,
                         ats_platform="indeed",
                         source="indeed",
-                    ))
+                    )
+                    listings.append(listing)
+                    emit(EventType.SEARCH_RESULT,
+                         f"[Indeed] {company} — {title}",
+                         listing={"title": title, "company": company,
+                                  "url": link, "ats_platform": "indeed"},
+                         board="indeed")
         except Exception as e:
+            emit(EventType.WARNING, f"[Indeed] search failed: {e}",
+                 board="indeed", query=query, error=str(e))
             print(f"[Indeed] search failed for {query!r}: {e}")
 
         return listings
@@ -220,11 +248,14 @@ class IndeedScraper(BaseJobScraper):
 # Aggregated discovery runner
 # ---------------------------------------------------------------------------
 
+from .github_scraper import GitHubRepoScraper
+
 SCRAPERS = {
     "greenhouse": GreenHouseScraper,
     "lever": LeverScraper,
     "linkedin": LinkedInScraper,
     "indeed": IndeedScraper,
+    "github_repos": GitHubRepoScraper,
 }
 
 
@@ -254,15 +285,36 @@ async def run_discovery(
             continue
         scraper = scraper_cls()
 
-        for query in queries:
+        emit(EventType.SEARCH_BOARD_START,
+             f"Searching {board_name.upper()}...",
+             board=board_name, query_count=len(queries))
+
+        # GitHub repos scraper ignores queries — only run it once
+        query_list = [""] if board_name == "github_repos" else queries
+
+        for query in query_list:
             try:
+                emit(EventType.SEARCH_START,
+                     f"Searching {board_name}" + (f": \"{query}\"" if query else ""),
+                     board=board_name, query=query)
                 results = await scraper.search(query, max_results=max_per_query)
                 for listing in results:
                     if listing.url not in seen_urls:
                         seen_urls.add(listing.url)
                         all_listings.append(listing)
+                emit(EventType.INFO,
+                     f"{board_name}" + (f": \"{query}\"" if query else "") +
+                     f" → {len(results)} results ({len(all_listings)} total unique)",
+                     board=board_name, query=query, results=len(results))
                 await asyncio.sleep(1.5)  # polite delay
             except Exception as e:
+                emit(EventType.WARNING,
+                     f"[{board_name}] query \"{query}\" failed: {e}",
+                     board=board_name, query=query, error=str(e))
                 print(f"[{board_name}] query {query!r} failed: {e}")
+
+        emit(EventType.SEARCH_BOARD_END,
+             f"Done searching {board_name.upper()} — {len(all_listings)} total so far",
+             board=board_name, total=len(all_listings))
 
     return all_listings

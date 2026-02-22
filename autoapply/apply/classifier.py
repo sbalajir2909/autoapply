@@ -19,6 +19,7 @@ except ImportError:
     anthropic = None  # type: ignore
 
 from ..config import ANTHROPIC_API_KEY, CLASSIFIER_MODEL
+from ..events import emit, EventType
 
 
 @dataclass
@@ -52,11 +53,20 @@ def classify_page(html: str) -> PageAnalysis:
     Returns:
         PageAnalysis dataclass.
     """
-    if not ANTHROPIC_API_KEY or anthropic is None:
-        return _heuristic_classify(html)
+    # Use OpenRouter client (no Anthropic API key needed)
+    try:
+        from ..llm import get_sync_client
+        client = get_sync_client()
+    except ImportError:
+        if not ANTHROPIC_API_KEY or anthropic is None:
+            emit(EventType.INFO, "No API key — using heuristic page classifier")
+            return _heuristic_classify(html)
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
     try:
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        emit(EventType.INFO,
+             f"Sending {min(len(html), 8000)} chars of HTML to Claude for classification...",
+             html_length=len(html))
 
         prompt = f"""Analyze this HTML from a job application website.
 
@@ -88,19 +98,51 @@ Return ONLY the JSON."""
             messages=[{"role": "user", "content": prompt}],
         )
         text = response.content[0].text.strip()
-        text = re.sub(r"```json\n?|```\n?", "", text).strip()
-        data = json.loads(text)
+        data = _safe_parse_json(text)
+        if data is None:
+            emit(EventType.WARNING, "Could not parse classifier JSON — falling back to heuristic")
+            return _heuristic_classify(html)
         return _parse_response(data)
 
+    except json.JSONDecodeError as e:
+        emit(EventType.WARNING, f"JSON parse error: {e} — falling back to heuristic", error=str(e))
+        return _heuristic_classify(html)
+    except (httpx.HTTPStatusError if 'httpx' in dir() else Exception) as e:
+        emit(EventType.WARNING, f"HTTP error: {e} — falling back to heuristic", error=str(e))
+        return _heuristic_classify(html)
     except Exception as e:
+        emit(EventType.WARNING, f"Claude classifier failed: {e} — falling back to heuristic",
+             error=str(e))
         print(f"[Classifier] Claude call failed: {e}")
         return _heuristic_classify(html)
 
 
+def _safe_parse_json(text: str) -> Optional[Dict]:
+    """Try to extract valid JSON from LLM response text."""
+    # Strip markdown fences
+    text = re.sub(r"```json\n?|```\n?", "", text).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # Fallback: extract first JSON object with regex
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
 def _parse_response(data: Dict) -> PageAnalysis:
     """Convert the raw JSON dict to a PageAnalysis dataclass."""
+    if not isinstance(data, dict):
+        return PageAnalysis()
     fields = []
     for f in data.get("form_fields", []):
+        if not isinstance(f, dict):
+            continue
         fields.append(FormField(
             name=f.get("name", ""),
             label=f.get("label", ""),

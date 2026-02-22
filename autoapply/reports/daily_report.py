@@ -9,18 +9,16 @@ from ..storage.database import get_all_stats, get_connection
 def get_today_stats() -> Dict[str, Any]:
     """Return stats for applications discovered/applied today."""
     today = date.today().isoformat()
-    conn = get_connection()
 
-    discovered_today = conn.execute(
-        "SELECT COUNT(*) FROM jobs WHERE date(date_discovered) = ?", (today,)
-    ).fetchone()[0]
+    with get_connection() as conn:
+        discovered_today = conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE date(date_discovered) = ?", (today,)
+        ).fetchone()[0]
 
-    applied_today = conn.execute(
-        "SELECT COUNT(*) FROM jobs WHERE date(date_applied) = ? AND status = 'applied'",
-        (today,),
-    ).fetchone()[0]
-
-    conn.close()
+        applied_today = conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE date(date_applied) = ? AND status = 'applied'",
+            (today,),
+        ).fetchone()[0]
 
     return {
         "date": today,

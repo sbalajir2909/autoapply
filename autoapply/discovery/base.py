@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Optional
+from urllib.parse import urlparse
 
 
 @dataclass
@@ -17,6 +18,13 @@ class JobListing:
     location: str = ""
     date_posted: str = ""
     source: str = ""  # which scraper found it
+
+    def is_valid(self) -> bool:
+        """Check that this listing has a usable URL and company name."""
+        if not self.company or not self.company.strip():
+            return False
+        parsed = urlparse(self.url)
+        return bool(parsed.scheme in ("http", "https") and parsed.netloc)
 
 
 class BaseJobScraper(ABC):
