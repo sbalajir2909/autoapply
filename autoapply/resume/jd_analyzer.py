@@ -70,7 +70,7 @@ def _claude_analyze(jd_text: str) -> Dict[str, Any]:
     try:
         from ..llm import get_sync_client
         client = get_sync_client()
-    except ImportError:
+    except (ImportError, ValueError):
         if not ANTHROPIC_API_KEY or anthropic is None:
             return {}
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)

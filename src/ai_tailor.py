@@ -228,7 +228,7 @@ class AIResumeTailorAsync:
         try:
             from autoapply.llm import get_async_client
             self.client = get_async_client()
-        except ImportError:
+        except (ImportError, ValueError):
             if not self.api_key:
                 raise ValueError("ANTHROPIC_API_KEY required (or install autoapply.llm for OpenRouter)")
             import anthropic

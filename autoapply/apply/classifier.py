@@ -57,7 +57,7 @@ def classify_page(html: str) -> PageAnalysis:
     try:
         from ..llm import get_sync_client
         client = get_sync_client()
-    except ImportError:
+    except (ImportError, ValueError):
         if not ANTHROPIC_API_KEY or anthropic is None:
             emit(EventType.INFO, "No API key — using heuristic page classifier")
             return _heuristic_classify(html)

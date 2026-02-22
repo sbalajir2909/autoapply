@@ -8,6 +8,13 @@ Sensitive values (API keys) are read from environment variables.
 import os
 from pathlib import Path
 
+# Load .env file if present (before reading any os.environ calls)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent / ".env")
+except ImportError:
+    pass  # python-dotenv not installed — rely on exported env vars
+
 # ---------------------------------------------------------------------------
 # Candidate profile — fill in your details
 # ---------------------------------------------------------------------------

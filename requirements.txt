@@ -18,3 +18,6 @@ apscheduler>=3.10.0
 
 # AutoApply — Dashboard
 streamlit>=1.30.0
+
+# AutoApply — Environment / Config
+python-dotenv>=1.0.0
