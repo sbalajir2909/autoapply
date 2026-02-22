@@ -13,6 +13,11 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 
+try:
+    import anthropic
+except ImportError:
+    anthropic = None  # type: ignore
+
 from ..config import ANTHROPIC_API_KEY, CLASSIFIER_MODEL
 
 
@@ -47,11 +52,10 @@ def classify_page(html: str) -> PageAnalysis:
     Returns:
         PageAnalysis dataclass.
     """
-    if not ANTHROPIC_API_KEY:
+    if not ANTHROPIC_API_KEY or anthropic is None:
         return _heuristic_classify(html)
 
     try:
-        import anthropic
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
         prompt = f"""Analyze this HTML from a job application website.

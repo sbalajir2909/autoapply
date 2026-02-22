@@ -42,10 +42,14 @@ from .config import (
 from .storage.database import init_db, insert_job, update_status, get_all_stats
 from .storage.dedup import generate_job_uuid, generate_sig_hash, is_duplicate, extract_post_id_from_url
 from .storage.rag_store import RagStore
-from .discovery.job_boards import run_discovery
+from .discovery.job_boards import run_discovery, SCRAPERS
 from .discovery.base import JobListing
+from .discovery.playwright_scraper import PlaywrightScraper
 from .resume.jd_analyzer import analyze_jd
 from .resume.rag_tailor import tailor_resume_for_job
+from .apply.classifier import classify_page
+from .apply.navigator import navigate_to_apply_page
+from .apply.submitter import decide_and_submit
 from .reports.daily_report import print_daily_report
 
 
@@ -79,6 +83,19 @@ async def main_pipeline(dry_run: bool = False, max_apps: int = MAX_APPS_PER_RUN)
         max_per_query=10,
     )
     print(f"  Raw listings found: {len(raw_listings)}")
+
+    # Phase 1b: Fetch full JD for listings missing it (card-scraped results)
+    missing_jd = [l for l in raw_listings if not l.job_description]
+    if missing_jd:
+        print(f"  Fetching JD for {len(missing_jd)} listings missing descriptions...")
+        for listing in missing_jd:
+            ats = listing.ats_platform or "unknown"
+            scraper_cls = SCRAPERS.get(ats)
+            if scraper_cls:
+                try:
+                    listing.job_description = await scraper_cls().fetch_job_description(listing.url)
+                except Exception as e:
+                    print(f"    [JD fetch failed] {listing.url}: {e}")
 
     # ---------------------------------------------------------------------------
     # Phase 2: Deduplication & Storage
@@ -144,11 +161,6 @@ async def main_pipeline(dry_run: bool = False, max_apps: int = MAX_APPS_PER_RUN)
     # Phase 3 + 4: Resume tailoring + Application (per job)
     # ---------------------------------------------------------------------------
     print("\n[Phase 3+4] Tailoring resumes and applying...")
-
-    from .discovery.playwright_scraper import PlaywrightScraper
-    from .apply.classifier import classify_page
-    from .apply.navigator import navigate_to_apply_page
-    from .apply.submitter import decide_and_submit
 
     applied_count = 0
     queued_count = 0

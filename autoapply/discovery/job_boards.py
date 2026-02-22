@@ -15,6 +15,8 @@ from bs4 import BeautifulSoup
 
 from .base import BaseJobScraper, JobListing
 from .playwright_scraper import scrape_html, scroll_and_get_html
+from .dedup_utils import _detect_ats
+from .duckduckgo import DuckDuckGoDiscovery
 from ..config import PAGE_LOAD_TIMEOUT
 
 
@@ -32,7 +34,6 @@ class GreenHouseScraper(BaseJobScraper):
         Greenhouse doesn't have a global search; use DuckDuckGo to find
         Greenhouse postings matching the query, then fetch each one.
         """
-        from .duckduckgo import DuckDuckGoDiscovery
         ddg = DuckDuckGoDiscovery(queries=[f"site:boards.greenhouse.io {query}"])
         listings = await ddg.discover(max_per_query=max_results)
         return listings
@@ -66,7 +67,6 @@ class LeverScraper(BaseJobScraper):
     """Scrape job postings on Lever (jobs.lever.co)."""
 
     async def search(self, query: str, max_results: int = 10) -> List[JobListing]:
-        from .duckduckgo import DuckDuckGoDiscovery
         ddg = DuckDuckGoDiscovery(queries=[f"site:jobs.lever.co {query}"])
         listings = await ddg.discover(max_per_query=max_results)
         for l in listings:

@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 
 from .base import JobListing
 from .playwright_scraper import scrape_html
+from .dedup_utils import _detect_ats
 from ..config import SEARCH_QUERIES
 
 
@@ -24,30 +25,14 @@ JOB_URL_PATTERNS = [
     r"linkedin\.com/jobs/",
     r"indeed\.com/viewjob",
     r"workday\.com/",
+    r"myworkdayjobs\.com/",
     r"icims\.com/",
+    r"taleo\.net/",
     r"jobs\.lever\.co/",
     r"boards\.greenhouse\.io/",
 ]
 
 _JOB_PATTERN_RE = re.compile("|".join(JOB_URL_PATTERNS), re.IGNORECASE)
-
-
-def _detect_ats(url: str) -> str:
-    """Guess the ATS platform from a URL."""
-    url_lower = url.lower()
-    if "greenhouse" in url_lower:
-        return "greenhouse"
-    if "lever" in url_lower:
-        return "lever"
-    if "linkedin" in url_lower:
-        return "linkedin"
-    if "indeed" in url_lower:
-        return "indeed"
-    if "workday" in url_lower:
-        return "workday"
-    if "icims" in url_lower:
-        return "icims"
-    return "unknown"
 
 
 def _extract_urls_from_ddg_html(html: str) -> List[str]:

@@ -29,7 +29,7 @@ CANDIDATE_PROFILE = {
 }
 
 # ---------------------------------------------------------------------------
-# Job search queries — customize for your target roles
+# Job search queries
 # ---------------------------------------------------------------------------
 SEARCH_QUERIES = [
     "cybersecurity engineer new grad 2025",
@@ -44,7 +44,7 @@ SEARCH_QUERIES = [
 ]
 
 # ---------------------------------------------------------------------------
-# Target job boards
+# Target job boards and keywords
 # ---------------------------------------------------------------------------
 JOB_BOARDS = [
     "greenhouse",
