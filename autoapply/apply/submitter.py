@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 from .classifier import PageAnalysis
+from .filler import fill_form, fuzzy_match_field
 from .strategies import get_strategy
 from ..config import AUTO_SUBMIT_ATS, SCREENSHOT_DIR, CANDIDATE_PROFILE
 from ..storage.database import update_status
@@ -54,7 +55,6 @@ async def decide_and_submit(
         print("[Submitter] DRY RUN — filling form but not submitting")
         # Just fill, don't submit
         try:
-            from .filler import fill_form
             await fill_form(page, page_analysis.form_fields, resume_pdf_path, profile)
         except Exception as e:
             print(f"[Submitter] Dry-run fill error: {e}")
@@ -103,7 +103,6 @@ def _serialize_form_state(analysis: PageAnalysis, profile: Dict) -> str:
     """Serialize filled form data as JSON for dashboard display."""
     fields = []
     for f in analysis.form_fields:
-        from .filler import fuzzy_match_field
         value = fuzzy_match_field(f.name or f.label, profile) or ""
         fields.append({"field": f.name or f.label, "type": f.field_type, "value": value})
     return json.dumps(fields)

@@ -15,6 +15,11 @@ from typing import Dict, Any, List
 # Allow importing from the parent src/ package
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+try:
+    import anthropic
+except ImportError:
+    anthropic = None  # type: ignore
+
 from src.extractor import extract_keywords, KeywordProfile
 from ..config import ANTHROPIC_API_KEY, CLASSIFIER_MODEL
 
@@ -61,11 +66,10 @@ def _claude_analyze(jd_text: str) -> Dict[str, Any]:
     Call Claude Haiku for fast structured JD analysis.
     Returns empty dict on failure (graceful degradation).
     """
-    if not ANTHROPIC_API_KEY:
+    if not ANTHROPIC_API_KEY or anthropic is None:
         return {}
 
     try:
-        import anthropic
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
         prompt = f"""Analyze this job description and return ONLY a JSON object with these fields:

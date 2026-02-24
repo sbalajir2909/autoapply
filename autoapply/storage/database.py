@@ -6,23 +6,28 @@ Schema:
 """
 
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-from ..config import DB_PATH
+import autoapply.config as _cfg   # import module, not value — so tests can patch cfg.DB_PATH
+
+
+def _db_path() -> str:
+    """Read DB_PATH from config at call time so test fixtures can redirect it."""
+    return _cfg.DB_PATH
 
 
 def get_connection() -> sqlite3.Connection:
     """Return a SQLite connection with row_factory set to dict-like rows."""
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db() -> None:
     """Create tables if they don't exist."""
-    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+    Path(_db_path()).parent.mkdir(parents=True, exist_ok=True)
     conn = get_connection()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS jobs (
@@ -36,7 +41,7 @@ def init_db() -> None:
             ats_platform    TEXT,
             tailored_resume_path TEXT,
             screenshot_path TEXT,
-            form_data       TEXT,        -- JSON blob of filled form fields
+            form_data       TEXT,
             date_discovered TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             date_applied    TIMESTAMP,
             status          TEXT DEFAULT 'discovered',
@@ -61,9 +66,7 @@ def insert_job(
     job_post_id: str = "",
     ats_platform: str = "",
 ) -> bool:
-    """
-    Insert a new job. Returns True if inserted, False if it was a duplicate.
-    """
+    """Insert a new job. Returns True if inserted, False if it was a duplicate."""
     conn = get_connection()
     try:
         conn.execute(
@@ -94,7 +97,7 @@ def update_status(
 ) -> None:
     """Update the status and optional metadata for a job."""
     conn = get_connection()
-    date_applied = datetime.utcnow().isoformat() if status == "applied" else None
+    date_applied = datetime.now(timezone.utc).isoformat() if status == "applied" else None
     conn.execute(
         """
         UPDATE jobs
